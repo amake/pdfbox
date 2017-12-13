@@ -19,7 +19,9 @@ package org.apache.fontbox.ttf;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -297,6 +299,101 @@ public class GlyphSubstitutionTable extends TTFTable
         }
     }
 
+    private String getScript()
+    {
+        return "latn";
+    }
+
+    private List<LangSysTable> getLangSysTables(String script)
+    {
+        List<LangSysTable> result = new ArrayList<>();
+        for (ScriptRecord scriptRecord : scriptList)
+        {
+            if (scriptRecord.scriptTag.equals(script))
+            {
+                LangSysTable def = scriptRecord.scriptTable.defaultLangSysTable;
+                if (def != null)
+                {
+                    result.add(def);
+                }
+                for (LangSysRecord langSysRecord : scriptRecord.scriptTable.langSysRecords)
+                {
+                    result.add(langSysRecord.langSysTable);
+                }
+            }
+        }
+        return result;
+    }
+
+    private List<FeatureRecord> getFeatureRecords(List<LangSysTable> langSysTables)
+    {
+        List<FeatureRecord> result = new ArrayList<>();
+        for (LangSysTable langSysTable : langSysTables)
+        {
+            int required = langSysTable.requiredFeatureIndex;
+            if (required != 0xffff) // if no required features = 0xFFFF
+            {
+                result.add(featureList[required]);
+            }
+            for (int featureIndex : langSysTable.featureIndices)
+            {
+                if (featureIndex >= 0 && featureIndex < featureList.length)
+                {
+                    result.add(featureList[featureIndex]);
+                }
+            }
+        }
+        return result;
+    }
+
+    private List<LookupTable> getLookupTables(List<FeatureRecord> featureRecords)
+    {
+        List<LookupTable> result = new ArrayList<>();
+        for (FeatureRecord featureRecord : featureRecords)
+        {
+            for (int lookupListIndex : featureRecord.featureTable.lookupListIndices)
+            {
+                if (lookupListIndex >= 0 && lookupListIndex < lookupList.length)
+                {
+                    result.add(lookupList[lookupListIndex]);
+                }
+            }
+        }
+        return result;
+    }
+
+    private int doLookup(LookupTable lookupTable, int gid)
+    {
+        for (LookupSubTable lookupSubtable : lookupTable.subTables)
+        {
+            int coverageIndex = lookupSubtable.coverageTable.getCoverageIndex(gid);
+            if (coverageIndex >= 0)
+            {
+                return lookupSubtable.doSubstitution(gid, coverageIndex);
+            }
+        }
+        return gid;
+    }
+
+    public int getVertSubstitution(int gid)
+    {
+        if (gid == -1)
+        {
+            return -1;
+        }
+        List<LangSysTable> langSysTables = getLangSysTables(getScript());
+        List<FeatureRecord> featureRecords = getFeatureRecords(langSysTables);
+        List<LookupTable> lookupTables = getLookupTables(featureRecords);
+        for (LookupTable lookupTable : lookupTables)
+        {
+            if (lookupTable.lookupType == 1)
+            {
+                return doLookup(lookupTable, gid);
+            }
+        }
+        return gid;
+    }
+
     RangeRecord readRangeRecord(TTFDataStream data) throws IOException
     {
         RangeRecord rangeRecord = new RangeRecord();
@@ -418,11 +515,19 @@ public class GlyphSubstitutionTable extends TTFTable
         int substFormat;
         int coverageOffset;
         CoverageTable coverageTable;
+
+        abstract int doSubstitution(int gid, int coverageIndex);
     }
 
     static class LookupTypeSingleSubstFormat1 extends LookupSubTable
     {
         int deltaGlyphID;
+
+        @Override
+        int doSubstitution(int gid, int coverageIndex)
+        {
+            return coverageIndex < 0 ? gid : gid + deltaGlyphID;
+        }
 
         @Override
         public String toString()
@@ -439,6 +544,12 @@ public class GlyphSubstitutionTable extends TTFTable
         int[] substituteGlyphIDs;
 
         @Override
+        int doSubstitution(int gid, int coverageIndex)
+        {
+            return coverageIndex < 0 ? gid : substituteGlyphIDs[coverageIndex];
+        }
+
+        @Override
         public String toString()
         {
             return String.format(
@@ -450,12 +561,20 @@ public class GlyphSubstitutionTable extends TTFTable
     static abstract class CoverageTable
     {
         int coverageFormat;
+
+        abstract int getCoverageIndex(int gid);
     }
 
     static class CoverageTableFormat1 extends CoverageTable
     {
         int glyphCount;
         int[] glyphArray;
+
+        @Override
+        int getCoverageIndex(int gid)
+        {
+            return Arrays.binarySearch(glyphArray, gid);
+        }
 
         @Override
         public String toString()
@@ -470,6 +589,19 @@ public class GlyphSubstitutionTable extends TTFTable
     {
         int rangeCount;
         RangeRecord[] rangeRecords;
+
+        @Override
+        int getCoverageIndex(int gid)
+        {
+            for (RangeRecord rangeRecord : rangeRecords)
+            {
+                if (rangeRecord.startGlyphID <= gid && gid <= rangeRecord.endGlyphID)
+                {
+                    return rangeRecord.startCoverageIndex + gid - rangeRecord.startGlyphID;
+                }
+            }
+            return -1;
+        }
 
         @Override
         public String toString()
