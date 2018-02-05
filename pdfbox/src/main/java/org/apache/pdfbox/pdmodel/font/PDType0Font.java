@@ -20,7 +20,6 @@ import java.awt.geom.GeneralPath;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -92,7 +91,7 @@ public class PDType0Font extends PDFont implements PDVectorFont
     {
         if (vertical)
         {
-            ttf.setEnableGsubFeatures(Collections.singleton("vert"));
+            ttf.setVertical(true);
         }
         embedder = new PDCIDFontType2Embedder(document, dict, ttf, embedSubset, this, vertical);
         descendantFont = embedder.getCIDFont();

@@ -16,6 +16,7 @@
  */
 package org.apache.fontbox.ttf;
 
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -28,17 +29,22 @@ public class SubstitutingCmapLookup implements CmapLookup
 
     private final CmapSubtable cmap;
     private final GlyphSubstitutionTable gsub;
+    private final Collection<String> enabledFeatures;
 
-    public SubstitutingCmapLookup(CmapSubtable cmap, GlyphSubstitutionTable gsub)
+    public SubstitutingCmapLookup(CmapSubtable cmap, GlyphSubstitutionTable gsub,
+            Collection<String> enabledFeatures)
     {
         this.cmap = cmap;
         this.gsub = gsub;
+        this.enabledFeatures = enabledFeatures;
     }
 
     @Override
     public int getGlyphId(int characterCode)
     {
-        return gsub.getVertSubstitution(cmap.getGlyphId(characterCode));
+        int gid = cmap.getGlyphId(characterCode);
+        int vgid = gsub.getVertSubstitution(gid, enabledFeatures);
+        return vgid;
     }
 
     @Override

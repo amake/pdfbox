@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -296,7 +297,14 @@ public class GlyphSubstitutionTable extends TTFTable
 
     private String getScript()
     {
-        return "latn";
+        for (ScriptRecord scriptRecord : scriptList)
+        {
+            if ("latn".equals(scriptRecord.scriptTag))
+            {
+                return scriptRecord.scriptTag;
+            }
+        }
+        return scriptList[0].scriptTag;
     }
 
     private List<LangSysTable> getLangSysTables(String script)
@@ -320,7 +328,19 @@ public class GlyphSubstitutionTable extends TTFTable
         return result;
     }
 
-    private List<FeatureRecord> getFeatureRecords(List<LangSysTable> langSysTables)
+    /**
+     * Get a list of {@code FeatureRecord}s from a collection of {@code LangSysTable}s. Optionally filter the returned
+     * features by supplying a list of allowed feature tags in {@code enabledFeatures}.
+     *
+     * Note that features listed as required ({@code LangSysTable#requiredFeatureIndex}) will be included even if not
+     * explicitly enabled.
+     *
+     * @param langSysTables The {@code LangSysTable}s indicating {@code FeatureRecord}s to search for
+     * @param enabledFeatures An optional whitelist of feature tags ({@code null} to allow all)
+     * @return The indicated {@code FeatureRecord}s
+     */
+    private List<FeatureRecord> getFeatureRecords(List<LangSysTable> langSysTables,
+            Collection<String> enabledFeatures)
     {
         List<FeatureRecord> result = new ArrayList<>();
         for (LangSysTable langSysTable : langSysTables)
@@ -334,7 +354,11 @@ public class GlyphSubstitutionTable extends TTFTable
             {
                 if (featureIndex >= 0 && featureIndex < featureList.length)
                 {
-                    result.add(featureList[featureIndex]);
+                    if (enabledFeatures == null
+                            || enabledFeatures.contains(featureList[featureIndex].featureTag))
+                    {
+                        result.add(featureList[featureIndex]);
+                    }
                 }
             }
         }
@@ -370,14 +394,18 @@ public class GlyphSubstitutionTable extends TTFTable
         return gid;
     }
 
-    public int getVertSubstitution(int gid)
+    public int getVertSubstitution(int gid, Collection<String> enabledFeatures)
     {
         if (gid == -1)
         {
             return -1;
         }
         List<LangSysTable> langSysTables = getLangSysTables(getScript());
-        List<FeatureRecord> featureRecords = getFeatureRecords(langSysTables);
+        List<FeatureRecord> featureRecords = getFeatureRecords(langSysTables, enabledFeatures);
+        if (featureRecords.isEmpty())
+        {
+            return gid;
+        }
         List<LookupTable> lookupTables = getLookupTables(featureRecords);
         for (LookupTable lookupTable : lookupTables)
         {

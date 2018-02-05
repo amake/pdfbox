@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -48,7 +49,7 @@ public class TrueTypeFont implements FontBoxFont, Closeable
     private final Object lockReadtable = new Object();
     private final Object lockPSNames = new Object();
 
-    private final Set<String> enabledGsubFeatures = new HashSet<>();
+    private boolean isVertical = false;
 
     /**
      * Constructor.  Clients should use the TTFParser to create a new TrueTypeFont object.
@@ -574,12 +575,13 @@ public class TrueTypeFont implements FontBoxFont, Closeable
             }
         }
 
-        if (!enabledGsubFeatures.isEmpty())
+        if (isVertical)
         {
             GlyphSubstitutionTable table = getGsub();
             if (table != null)
             {
-                return new SubstitutingCmapLookup(cmap, (GlyphSubstitutionTable) table);
+                return new SubstitutingCmapLookup(cmap, (GlyphSubstitutionTable) table,
+                        Arrays.asList("vert", "vrt2"));
             }
         }
         return cmap;
@@ -716,8 +718,8 @@ public class TrueTypeFont implements FontBoxFont, Closeable
         }
     }
 
-    public void setEnableGsubFeatures(Set<String> features)
+    public void setVertical(boolean isVertical)
     {
-        enabledGsubFeatures.addAll(features);
+        this.isVertical = isVertical;
     }
 }
