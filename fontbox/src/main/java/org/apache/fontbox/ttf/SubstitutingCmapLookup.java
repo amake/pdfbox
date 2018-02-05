@@ -16,6 +16,7 @@
  */
 package org.apache.fontbox.ttf;
 
+import java.lang.Character.UnicodeScript;
 import java.util.Collection;
 import java.util.List;
 
@@ -43,13 +44,14 @@ public class SubstitutingCmapLookup implements CmapLookup
     public int getGlyphId(int characterCode)
     {
         int gid = cmap.getGlyphId(characterCode);
-        int vgid = gsub.getVertSubstitution(gid, enabledFeatures);
-        return vgid;
+        UnicodeScript script = UnicodeScript.of(characterCode);
+        int sgid = gsub.getSubstitution(gid, script, enabledFeatures);
+        return sgid;
     }
 
     @Override
     public List<Integer> getCharCodes(int gid)
     {
-        return cmap.getCharCodes(gsub.getVertUnsubstitution(gid));
+        return cmap.getCharCodes(gsub.getUnsubstitution(gid));
     }
 }

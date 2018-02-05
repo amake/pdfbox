@@ -18,13 +18,16 @@
 package org.apache.fontbox.ttf;
 
 import java.io.IOException;
+import java.lang.Character.UnicodeScript;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -48,7 +51,11 @@ public class GlyphSubstitutionTable extends TTFTable
     private FeatureRecord[] featureList;
     private LookupTable[] lookupList;
 
+    private Set<String> supportedScripts;
+    private Map<Integer, Integer> lookupCache = new HashMap<>();
     private Map<Integer, Integer> reverseLookup = new HashMap<>();
+
+    private String lastUsedSupportedScript;
 
     GlyphSubstitutionTable(TrueTypeFont font)
     {
@@ -75,6 +82,8 @@ public class GlyphSubstitutionTable extends TTFTable
         scriptList = readScriptList(data, start + scriptListOffset);
         featureList = readFeatureList(data, start + featureListOffset);
         lookupList = readLookupList(data, start + lookupListOffset);
+
+        supportedScripts = getSupportedScripts();
     }
 
     ScriptRecord[] readScriptList(TTFDataStream data, long offset) throws IOException
@@ -295,24 +304,316 @@ public class GlyphSubstitutionTable extends TTFTable
         }
     }
 
-    private String getScript()
+    private Set<String> getSupportedScripts()
     {
+        Set<String> result = new HashSet<>(scriptList.length);
         for (ScriptRecord scriptRecord : scriptList)
         {
-            if ("latn".equals(scriptRecord.scriptTag))
-            {
-                return scriptRecord.scriptTag;
-            }
+            result.add(scriptRecord.scriptTag);
         }
-        return scriptList[0].scriptTag;
+        return result;
     }
 
-    private List<LangSysTable> getLangSysTables(String script)
+    /**
+     * Get the OpenType script tag corresponding to the provided {@code UnicodeScript}.
+     * @param script The {@code UnicodeScript}
+     * @return The corresponding OpenType script tag
+     */
+    private String getScriptTag(UnicodeScript script)
+    {
+        String tag = scriptToTag(script);
+        if (tag == SCRIPT_TAG_INHERITED
+                || (tag == SCRIPT_TAG_DEFAULT && !supportedScripts.contains(tag)))
+        {
+            // We don't know what script this should be.
+            if (lastUsedSupportedScript != null)
+            {
+                // Use past context
+                return lastUsedSupportedScript;
+            }
+            else
+            {
+                // We have no past context and (currently) no way to get future context so we guess.
+                tag = scriptList[0].scriptTag;
+            }
+        }
+        if (supportedScripts.contains(tag))
+        {
+            lastUsedSupportedScript = tag;
+        }
+        return tag;
+    }
+
+    /**
+     * Convert a {@code UnicodeScript} to an OpenType script tag. These are not necessarily the same as Unicode scripts.
+     *
+     * @param script
+     * @return A four-letter script tag
+     * @see <a href="https://www.microsoft.com/typography/otspec/scripttags.htm">Microsoft Typography: Script Tags</a>
+     */
+    private static String scriptToTag(UnicodeScript script)
+    {
+        switch (script)
+        {
+        // Adlam: adlm
+        // Ahom: ahom
+        // Anatolian Hieroglyphs: hluw
+        case ARABIC:
+            return "arab";
+        case ARMENIAN:
+            return "armn";
+        case AVESTAN:
+            return "avst";
+        case BALINESE:
+            return "bali";
+        case BAMUM:
+            return "bamu";
+        // Bassa Vah: bass
+        case BATAK:
+            return "batk";
+        case BENGALI:
+            return "beng";
+        // Bengali v.2: bng2
+        // Bhaiksuki: bhks
+        case BOPOMOFO:
+            return "bopo";
+        case BRAHMI:
+            return "brah";
+        case BRAILLE:
+            return "brai";
+        case BUGINESE:
+            return "bugi";
+        case BUHID:
+            return "buhd";
+        // Byzantine Music: byzm
+        case CANADIAN_ABORIGINAL:
+            return "cans";
+        case CARIAN:
+            return "cari";
+        // Caucasian Albanian: aghb
+        // Chakma: cakm
+        case CHAM:
+            return "cham";
+        case CHEROKEE:
+            return "cher";
+        case COMMON: // "Default" in OpenType
+            return SCRIPT_TAG_DEFAULT;
+        case COPTIC:
+            return "copt";
+        case CUNEIFORM: // "Sumero-Akkadian Cuneiform" in OpenType
+            return "xsux";
+        case CYPRIOT:
+            return "cprt";
+        case CYRILLIC:
+            return "cyrl";
+        case DESERET:
+            return "dsrt";
+        case DEVANAGARI:
+            return "deva";
+        // Devanagari v.2: dev2
+        // Duployan: dupl
+        case EGYPTIAN_HIEROGLYPHS:
+            return "egyp";
+        // Elbasan: elba
+        case ETHIOPIC:
+            return "ethi";
+        case GEORGIAN:
+            return "geor";
+        case GLAGOLITIC:
+            return "glag";
+        case GOTHIC:
+            return "goth";
+        // Grantha: gran
+        case GREEK:
+            return "grek";
+        case GUJARATI:
+            return "gujr";
+        // Gujarati v.2: gjr2
+        case GURMUKHI:
+            return "guru";
+        // Gurmukhi v.2: gur2
+        case HAN: // "CJK Ideographic" in OpenType
+            return "hani";
+        case HANGUL:
+            return "hang";
+        // Hangul Jamo: jamo
+        case HANUNOO:
+            return "hano";
+        // Hatran: hatr
+        case HEBREW:
+            return "hebr";
+        case HIRAGANA:
+            return "kana";
+        case IMPERIAL_ARAMAIC:
+            return "armi";
+        case INHERITED:
+            return SCRIPT_TAG_INHERITED;
+        case INSCRIPTIONAL_PAHLAVI:
+            return "phli";
+        case INSCRIPTIONAL_PARTHIAN:
+            return "prti";
+        case JAVANESE:
+            return "java";
+        case KAITHI:
+            return "kthi";
+        case KANNADA:
+            return "knda";
+        // Kannada v.2: knd2
+        case KATAKANA:
+            return "kana";
+        case KAYAH_LI:
+            return "kali";
+        case KHAROSHTHI:
+            return "khar";
+        case KHMER:
+            return "khmr";
+        // Khojki: khoj
+        // Khudawadi: sind
+        case LAO:
+            return "lao";
+        case LATIN:
+            return "latn";
+        case LEPCHA:
+            return "lepc";
+        case LIMBU:
+            return "limb";
+        // Linear A: lina
+        case LINEAR_B:
+            return "linb";
+        case LISU:
+            return "lisu";
+        case LYCIAN:
+            return "lyci";
+        case LYDIAN:
+            return "lydi";
+        // Mahajani: mahj
+        case MALAYALAM:
+            return "mlym";
+        // Malayalam v.2: mlm2
+        case MANDAIC:
+            return "mand";
+        // Manichaean: mani
+        // Marchen: marc
+        // Mathematical Alphanumeric Symbols: math
+        case MEETEI_MAYEK:
+            return "mtei";
+        // Mende Kikakui: mend
+        // Meroitic Cursive: merc
+        // Meroitic Hieroglyphs: mero
+        // Miao: plrd
+        // Modi: modi
+        case MONGOLIAN:
+            return "mong";
+        // Mro: mroo
+        // Multani: mult
+        // Musical Symbols: musc
+        case MYANMAR:
+            return "mymr";
+        // Myanmar v.2: mym2
+        // Nabataean: nbat
+        // Newa: newa
+        case NEW_TAI_LUE:
+            return "talu";
+        case NKO:
+            return "nko ";
+        case OGHAM:
+            return "ogam";
+        case OL_CHIKI:
+            return "olck";
+        case OLD_ITALIC:
+            return "ital";
+        // Old Hungarian: hung
+        // Old North Arabian: narb
+        // Old Permic: perm
+        case OLD_PERSIAN:
+            return "xpeo";
+        case OLD_SOUTH_ARABIAN:
+            return "sarb";
+        case OLD_TURKIC:
+            return "orkh";
+        case ORIYA: // "Odia (formerly Oriya)"
+            return "orya";
+        // Odia v.2 (formerly Oriya v.2): ory2
+        // Osage: osge
+        case OSMANYA:
+            return "osma";
+        // Pahawh Hmong: hmng
+        // Palmyrene: palm
+        // Pau Cin Hau: pauc
+        case PHAGS_PA:
+            return "phag";
+        case PHOENICIAN:
+            return "phnx";
+        // Psalter Pahlavi: phlp
+        case REJANG:
+            return "rjng";
+        case RUNIC:
+            return "runr";
+        case SAMARITAN:
+            return "samr";
+        case SAURASHTRA:
+            return "saur";
+        // Sharada: shrd
+        case SHAVIAN:
+            return "shaw";
+        // Siddham: sidd
+        // Sign Writing: sgnw
+        case SINHALA:
+            return "sinh";
+        // Sora Sompeng: sora
+        case SUNDANESE:
+            return "sund";
+        case SYLOTI_NAGRI:
+            return "sylo";
+        case SYRIAC:
+            return "syrc";
+        case TAGALOG:
+            return "tglg";
+        case TAGBANWA:
+            return "tagb";
+        case TAI_LE:
+            return "tale";
+        case TAI_THAM:
+            return "lana";
+        case TAI_VIET:
+            return "tavt";
+        // Takri: takr
+        case TAMIL:
+            return "taml";
+        // Tamil v.2: tml2
+        // Tangut: tang
+        case TELUGU:
+            return "telu";
+        // Telugu v.2: tel2
+        case THAANA:
+            return "thaa";
+        case THAI:
+            return "thai";
+        case TIBETAN:
+            return "tibt";
+        case TIFINAGH:
+            return "tfng";
+        // Tirhuta: tirh
+        case UGARITIC:
+            return "ugar";
+        case UNKNOWN:
+            return SCRIPT_TAG_DEFAULT;
+        case VAI:
+            return "vai ";
+        // Warang Citi: wara
+        case YI:
+            return "yi  ";
+        default:
+            return SCRIPT_TAG_DEFAULT;
+        }
+    }
+
+    private List<LangSysTable> getLangSysTables(String scriptTag)
     {
         List<LangSysTable> result = new ArrayList<>();
         for (ScriptRecord scriptRecord : scriptList)
         {
-            if (scriptRecord.scriptTag.equals(script))
+            if (scriptRecord.scriptTag.equals(scriptTag))
             {
                 LangSysTable def = scriptRecord.scriptTable.defaultLangSysTable;
                 if (def != null)
@@ -394,13 +695,25 @@ public class GlyphSubstitutionTable extends TTFTable
         return gid;
     }
 
-    public int getVertSubstitution(int gid, Collection<String> enabledFeatures)
+    public int getSubstitution(int gid, UnicodeScript script, Collection<String> enabledFeatures)
     {
         if (gid == -1)
         {
             return -1;
         }
-        List<LangSysTable> langSysTables = getLangSysTables(getScript());
+        Integer cached = lookupCache.get(gid);
+        if (cached != null)
+        {
+            // Because script detection for indeterminate scripts (COMMON, INHERIT, etc.) depends on context,
+            // it is possible to return a different substitution for the same input. However we don't want that,
+            // as we need a one-to-one mapping.
+            return cached;
+        }
+        List<LangSysTable> langSysTables = getLangSysTables(getScriptTag(script));
+        if (langSysTables.isEmpty())
+        {
+            return gid;
+        }
         List<FeatureRecord> featureRecords = getFeatureRecords(langSysTables, enabledFeatures);
         if (featureRecords.isEmpty())
         {
@@ -411,21 +724,22 @@ public class GlyphSubstitutionTable extends TTFTable
         {
             if (lookupTable.lookupType == 1)
             {
-                int vgid = doLookup(lookupTable, gid);
-                reverseLookup.put(vgid, gid);
-                return vgid;
+                int sgid = doLookup(lookupTable, gid);
+                lookupCache.put(gid, sgid);
+                reverseLookup.put(sgid, gid);
+                return sgid;
             }
         }
         return gid;
     }
 
-    public int getVertUnsubstitution(int vgid)
+    public int getUnsubstitution(int sgid)
     {
-        Integer gid = reverseLookup.get(vgid);
+        Integer gid = reverseLookup.get(sgid);
         if (gid == null)
         {
             throw new IllegalArgumentException(
-                    "Trying to un-substitute a never-before-seen gid: " + vgid);
+                    "Trying to un-substitute a never-before-seen gid: " + sgid);
         }
         return gid;
     }
