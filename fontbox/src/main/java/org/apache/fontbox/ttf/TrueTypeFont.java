@@ -23,8 +23,11 @@ import java.io.InputStream;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+
 import org.apache.fontbox.FontBoxFont;
 import org.apache.fontbox.util.BoundingBox;
 
@@ -44,6 +47,8 @@ public class TrueTypeFont implements FontBoxFont, Closeable
     
     private final Object lockReadtable = new Object();
     private final Object lockPSNames = new Object();
+
+    private final Set<String> enabledGsubFeatures = new HashSet<>();
 
     /**
      * Constructor.  Clients should use the TTFParser to create a new TrueTypeFont object.
@@ -313,6 +318,17 @@ public class TrueTypeFont implements FontBoxFont, Closeable
     }
     
     /**
+     * Get the "gsub" table for this TTF.
+     *
+     * @return The "gsub" table.
+     * @throws IOException if there was an error reading the table.
+     */
+    public GlyphSubstitutionTable getGsub() throws IOException
+    {
+        return (GlyphSubstitutionTable) getTable(GlyphSubstitutionTable.TAG);
+    }
+
+    /**
      * Get the data of the TrueType Font
      * program representing the stream used to build this 
      * object (normally from the TTFParser object).
@@ -557,6 +573,15 @@ public class TrueTypeFont implements FontBoxFont, Closeable
                 cmap = cmapTable.getCmaps()[0];
             }
         }
+
+        if (!enabledGsubFeatures.isEmpty())
+        {
+            GlyphSubstitutionTable table = getGsub();
+            if (table != null)
+            {
+                cmap = new SubstitutingCmapSubtable(cmap, (GlyphSubstitutionTable) table);
+            }
+        }
         return cmap;
     }
 
@@ -689,5 +714,10 @@ public class TrueTypeFont implements FontBoxFont, Closeable
         {
             return "(null - " + e.getMessage() + ")";
         }
+    }
+
+    public void setEnableGsubFeatures(Set<String> features)
+    {
+        enabledGsubFeatures.addAll(features);
     }
 }
