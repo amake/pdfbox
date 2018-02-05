@@ -510,7 +510,7 @@ public class TrueTypeFont implements FontBoxFont, Closeable
      * 
      * @throws IOException if the font could not be read
      */
-    public CmapSubtable getUnicodeCmap() throws IOException
+    public CmapLookup getUnicodeCmap() throws IOException
     {
         return getUnicodeCmap(true);
     }
@@ -522,7 +522,7 @@ public class TrueTypeFont implements FontBoxFont, Closeable
      * @param isStrict False if we allow falling back to any cmap, even if it's not Unicode.
      * @throws IOException if the font could not be read, or there is no Unicode cmap
      */
-    public CmapSubtable getUnicodeCmap(boolean isStrict) throws IOException
+    public CmapLookup getUnicodeCmap(boolean isStrict) throws IOException
     {
         CmapTable cmapTable = getCmap();
         if (cmapTable == null)
@@ -579,7 +579,7 @@ public class TrueTypeFont implements FontBoxFont, Closeable
             GlyphSubstitutionTable table = getGsub();
             if (table != null)
             {
-                cmap = new SubstitutingCmapSubtable(cmap, (GlyphSubstitutionTable) table);
+                return new SubstitutingCmapLookup(cmap, (GlyphSubstitutionTable) table);
             }
         }
         return cmap;
@@ -606,7 +606,7 @@ public class TrueTypeFont implements FontBoxFont, Closeable
         int uni = parseUniName(name);
         if (uni > -1)
         {
-            CmapSubtable cmap = getUnicodeCmap(false);
+            CmapLookup cmap = getUnicodeCmap(false);
             return cmap.getGlyphId(uni);
         }
         

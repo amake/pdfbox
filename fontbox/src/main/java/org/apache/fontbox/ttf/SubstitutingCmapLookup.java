@@ -18,48 +18,21 @@ package org.apache.fontbox.ttf;
 
 import java.util.List;
 
-public class SubstitutingCmapSubtable extends CmapSubtable
+/**
+ * A cmap lookup that performs substitution via the 'GSUB' table.
+ *
+ * @author Aaron Madlon-Kay
+ */
+public class SubstitutingCmapLookup implements CmapLookup
 {
 
     private final CmapSubtable cmap;
     private final GlyphSubstitutionTable gsub;
 
-    public SubstitutingCmapSubtable(CmapSubtable cmap, GlyphSubstitutionTable gsub)
+    public SubstitutingCmapLookup(CmapSubtable cmap, GlyphSubstitutionTable gsub)
     {
         this.cmap = cmap;
         this.gsub = gsub;
-    }
-
-    /**
-     * @return Returns the platformEncodingId.
-     */
-    public int getPlatformEncodingId()
-    {
-        return cmap.getPlatformEncodingId();
-    }
-
-    /**
-     * @param platformEncodingIdValue The platformEncodingId to set.
-     */
-    public void setPlatformEncodingId(int platformEncodingIdValue)
-    {
-        cmap.setPlatformEncodingId(platformEncodingIdValue);
-    }
-
-    /**
-     * @return Returns the platformId.
-     */
-    public int getPlatformId()
-    {
-        return cmap.getPlatformId();
-    }
-
-    /**
-     * @param platformIdValue The platformId to set.
-     */
-    public void setPlatformId(int platformIdValue)
-    {
-        cmap.setPlatformId(platformIdValue);
     }
 
     @Override
@@ -68,12 +41,7 @@ public class SubstitutingCmapSubtable extends CmapSubtable
         return gsub.getVertSubstitution(cmap.getGlyphId(characterCode));
     }
 
-    @Deprecated
-    public Integer getCharacterCode(int gid)
-    {
-        return cmap.getCharacterCode(gsub.getVertUnsubstitution(gid));
-    }
-
+    @Override
     public List<Integer> getCharCodes(int gid)
     {
         return cmap.getCharCodes(gsub.getVertUnsubstitution(gid));

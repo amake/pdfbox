@@ -27,7 +27,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import org.apache.fontbox.ttf.CmapSubtable;
+
+import org.apache.fontbox.ttf.CmapLookup;
 import org.apache.fontbox.ttf.HeaderTable;
 import org.apache.fontbox.ttf.HorizontalHeaderTable;
 import org.apache.fontbox.ttf.OS2WindowsMetricsTable;
@@ -56,7 +57,7 @@ abstract class TrueTypeEmbedder implements Subsetter
     private final PDDocument document;
     protected TrueTypeFont ttf;
     protected PDFontDescriptor fontDescriptor;
-    protected final CmapSubtable cmap;
+    protected final CmapLookup cmap;
     private final Set<Integer> subsetCodePoints = new HashSet<>();
     private final boolean embedSubset;
 
