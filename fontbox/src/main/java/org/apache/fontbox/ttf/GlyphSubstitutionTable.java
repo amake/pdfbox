@@ -21,7 +21,9 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -44,6 +46,8 @@ public class GlyphSubstitutionTable extends TTFTable
     private ScriptRecord[] scriptList;
     private FeatureRecord[] featureList;
     private LookupTable[] lookupList;
+
+    private Map<Integer, Integer> reverseLookup = new HashMap<>();
 
     GlyphSubstitutionTable(TrueTypeFont font)
     {
@@ -388,8 +392,21 @@ public class GlyphSubstitutionTable extends TTFTable
         {
             if (lookupTable.lookupType == 1)
             {
-                return doLookup(lookupTable, gid);
+                int vgid = doLookup(lookupTable, gid);
+                reverseLookup.put(vgid, gid);
+                return vgid;
             }
+        }
+        return gid;
+    }
+
+    public int getVertUnsubstitution(int vgid)
+    {
+        Integer gid = reverseLookup.get(vgid);
+        if (gid == null)
+        {
+            throw new IllegalArgumentException(
+                    "Trying to un-substitute a never-before-seen gid: " + vgid);
         }
         return gid;
     }
