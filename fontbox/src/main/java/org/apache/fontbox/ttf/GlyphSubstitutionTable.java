@@ -22,10 +22,12 @@ import java.lang.Character.UnicodeScript;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -40,7 +42,6 @@ import org.apache.commons.logging.LogFactory;
  */
 public class GlyphSubstitutionTable extends TTFTable
 {
-
     private static final Log LOG = LogFactory.getLog(GlyphSubstitutionTable.class);
 
     public static final String TAG = "GSUB";
@@ -562,7 +563,7 @@ public class GlyphSubstitutionTable extends TTFTable
      * @return The indicated {@code FeatureRecord}s
      */
     private List<FeatureRecord> getFeatureRecords(List<LangSysTable> langSysTables,
-            Collection<String> enabledFeatures)
+            final List<String> enabledFeatures)
     {
         List<FeatureRecord> result = new ArrayList<>();
         for (LangSysTable langSysTable : langSysTables)
@@ -584,20 +585,90 @@ public class GlyphSubstitutionTable extends TTFTable
                 }
             }
         }
+
+        // 'vrt2' supersedes 'vert' and they should not be used together
+        // https://www.microsoft.com/typography/otspec/features_uz.htm
+        if (containsFeature(result, "vrt2"))
+        {
+            removeFeature(result, "vert");
+        }
+
+        if (enabledFeatures != null && result.size() > 1)
+        {
+            Collections.sort(result, new Comparator<FeatureRecord>()
+            {
+                @Override
+                public int compare(FeatureRecord o1, FeatureRecord o2)
+                {
+                    return Integer.compare(enabledFeatures.indexOf(o1.featureTag),
+                            enabledFeatures.indexOf(o2.featureTag));
+                }
+            });
+        }
+
         return result;
     }
 
-    private List<LookupTable> getLookupTables(List<FeatureRecord> featureRecords)
+    private boolean containsFeature(List<FeatureRecord> featureRecords, String featureTag)
     {
-        List<LookupTable> result = new ArrayList<>();
         for (FeatureRecord featureRecord : featureRecords)
         {
-            for (int lookupListIndex : featureRecord.featureTable.lookupListIndices)
+            if (featureRecord.featureTag.equals(featureTag))
             {
-                if (lookupListIndex >= 0 && lookupListIndex < lookupList.length)
-                {
-                    result.add(lookupList[lookupListIndex]);
-                }
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void removeFeature(List<FeatureRecord> featureRecords, String featureTag)
+    {
+        Iterator<FeatureRecord> iter = featureRecords.iterator();
+        while (iter.hasNext())
+        {
+            if (iter.next().featureTag.equals(featureTag))
+            {
+                iter.remove();
+            }
+        }
+    }
+
+    private int applyFeature(FeatureRecord featureRecord, int gid)
+    {
+        List<LookupTable> lookupTables = getLookupTables(featureRecord);
+        if (!lookupTablesSupported(lookupTables))
+        {
+            LOG.debug("Skipping GSUB feature '" + featureRecord.featureTag
+                    + "' because it requires unsupported lookup table type");
+            return gid;
+        }
+        for (LookupTable lookupTable : lookupTables)
+        {
+            gid = doLookup(lookupTable, gid);
+        }
+        return gid;
+    }
+
+    private boolean lookupTablesSupported(List<LookupTable> lookupTables)
+    {
+        for (LookupTable lookupTable : lookupTables)
+        {
+            if (lookupTable.lookupType != 1)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private List<LookupTable> getLookupTables(FeatureRecord featureRecord)
+    {
+        List<LookupTable> result = new ArrayList<>();
+        for (int lookupListIndex : featureRecord.featureTable.lookupListIndices)
+        {
+            if (lookupListIndex >= 0 && lookupListIndex < lookupList.length)
+            {
+                result.add(lookupList[lookupListIndex]);
             }
         }
         return result;
@@ -616,7 +687,7 @@ public class GlyphSubstitutionTable extends TTFTable
         return gid;
     }
 
-    public int getSubstitution(int gid, UnicodeScript script, Collection<String> enabledFeatures)
+    public int getSubstitution(int gid, UnicodeScript script, List<String> enabledFeatures)
     {
         if (gid == -1)
         {
@@ -640,18 +711,14 @@ public class GlyphSubstitutionTable extends TTFTable
         {
             return gid;
         }
-        List<LookupTable> lookupTables = getLookupTables(featureRecords);
-        for (LookupTable lookupTable : lookupTables)
+        int sgid = gid;
+        for (FeatureRecord featureRecord : featureRecords)
         {
-            if (lookupTable.lookupType == 1)
-            {
-                int sgid = doLookup(lookupTable, gid);
-                lookupCache.put(gid, sgid);
-                reverseLookup.put(sgid, gid);
-                return sgid;
-            }
+            sgid = applyFeature(featureRecord, sgid);
         }
-        return gid;
+        lookupCache.put(gid, sgid);
+        reverseLookup.put(sgid, gid);
+        return sgid;
     }
 
     public int getUnsubstitution(int sgid)
