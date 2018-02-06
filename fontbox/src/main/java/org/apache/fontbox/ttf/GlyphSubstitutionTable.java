@@ -23,6 +23,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -321,291 +322,211 @@ public class GlyphSubstitutionTable extends TTFTable
      */
     private String getScriptTag(UnicodeScript script)
     {
-        String tag = scriptToTag(script);
-        if (tag == SCRIPT_TAG_INHERITED
-                || (tag == SCRIPT_TAG_DEFAULT && !supportedScripts.contains(tag)))
+        String[] tags = scriptToTags(script);
+        if (tags.length == 1)
         {
-            // We don't know what script this should be.
-            if (lastUsedSupportedScript != null)
+            String tag = tags[0];
+            if (tag == SCRIPT_TAG_INHERITED
+                    || (tag == SCRIPT_TAG_DEFAULT && !supportedScripts.contains(tag)))
             {
-                // Use past context
-                return lastUsedSupportedScript;
-            }
-            else
-            {
-                // We have no past context and (currently) no way to get future context so we guess.
-                tag = scriptList[0].scriptTag;
+                // We don't know what script this should be.
+                if (lastUsedSupportedScript != null)
+                {
+                    // Use past context
+                    return lastUsedSupportedScript;
+                }
+                else
+                {
+                    // We have no past context and (currently) no way to get future context so we guess.
+                    return lastUsedSupportedScript = scriptList[0].scriptTag;
+                }
             }
         }
-        if (supportedScripts.contains(tag))
+        for (String tag : tags)
         {
-            lastUsedSupportedScript = tag;
+            if (supportedScripts.contains(tag))
+            {
+                // Use the first recognized tag. We assume a single font only recognizes one version ("ver. 2")
+                // of a single script, or if it recognizes more than one that it prefers the latest one.
+                return lastUsedSupportedScript = tag;
+            }
         }
-        return tag;
+        return tags[0];
     }
 
     /**
-     * Convert a {@code UnicodeScript} to an OpenType script tag. These are not necessarily the same as Unicode scripts.
+     * A map associating {@code UnicodeScript}s with one or more OpenType script tags. Script tags are not necessarily
+     * the same as Unicode scripts. A single Unicode script may correspond to multiple tags, especially when there has
+     * been a revision to the latter (e.g. BENGALI -> [bng2, beng]). When there are multiple tags, they are ordered from
+     * newest to oldest.
      *
-     * @param script
-     * @return A four-letter script tag
      * @see <a href="https://www.microsoft.com/typography/otspec/scripttags.htm">Microsoft Typography: Script Tags</a>
      */
-    private static String scriptToTag(UnicodeScript script)
+    private static final Map<UnicodeScript, String[]> SCRIPT_TO_TAGS;
+    static
     {
-        switch (script)
-        {
+        Map<UnicodeScript, String[]> map = new EnumMap<>(UnicodeScript.class);
         // Adlam: adlm
         // Ahom: ahom
         // Anatolian Hieroglyphs: hluw
-        case ARABIC:
-            return "arab";
-        case ARMENIAN:
-            return "armn";
-        case AVESTAN:
-            return "avst";
-        case BALINESE:
-            return "bali";
-        case BAMUM:
-            return "bamu";
+        map.put(UnicodeScript.ARABIC, new String[] { "arab" });
+        map.put(UnicodeScript.ARABIC, new String[] { "arab" });
+        map.put(UnicodeScript.ARMENIAN, new String[] { "armn" });
+        map.put(UnicodeScript.AVESTAN, new String[] { "avst" });
+        map.put(UnicodeScript.BALINESE, new String[] { "bali" });
+        map.put(UnicodeScript.BAMUM, new String[] { "bamu" });
         // Bassa Vah: bass
-        case BATAK:
-            return "batk";
-        case BENGALI:
-            return "beng";
-        // Bengali v.2: bng2
+        map.put(UnicodeScript.BATAK, new String[] { "batk" });
+        map.put(UnicodeScript.BENGALI, new String[] { "bng2", "beng" });
         // Bhaiksuki: bhks
-        case BOPOMOFO:
-            return "bopo";
-        case BRAHMI:
-            return "brah";
-        case BRAILLE:
-            return "brai";
-        case BUGINESE:
-            return "bugi";
-        case BUHID:
-            return "buhd";
+        map.put(UnicodeScript.BOPOMOFO, new String[] { "bopo" });
+        map.put(UnicodeScript.BRAHMI, new String[] { "brah" });
+        map.put(UnicodeScript.BRAILLE, new String[] { "brai" });
+        map.put(UnicodeScript.BUGINESE, new String[] { "bugi" });
+        map.put(UnicodeScript.BUHID, new String[] { "buhd" });
         // Byzantine Music: byzm
-        case CANADIAN_ABORIGINAL:
-            return "cans";
-        case CARIAN:
-            return "cari";
+        map.put(UnicodeScript.CANADIAN_ABORIGINAL, new String[] { "cans" });
+        map.put(UnicodeScript.CARIAN, new String[] { "cari" });
         // Caucasian Albanian: aghb
         // Chakma: cakm
-        case CHAM:
-            return "cham";
-        case CHEROKEE:
-            return "cher";
-        case COMMON: // "Default" in OpenType
-            return SCRIPT_TAG_DEFAULT;
-        case COPTIC:
-            return "copt";
-        case CUNEIFORM: // "Sumero-Akkadian Cuneiform" in OpenType
-            return "xsux";
-        case CYPRIOT:
-            return "cprt";
-        case CYRILLIC:
-            return "cyrl";
-        case DESERET:
-            return "dsrt";
-        case DEVANAGARI:
-            return "deva";
-        // Devanagari v.2: dev2
+        map.put(UnicodeScript.CHAM, new String[] { "cham" });
+        map.put(UnicodeScript.CHEROKEE, new String[] { "cher" });
+        map.put(UnicodeScript.COMMON, new String[] { SCRIPT_TAG_DEFAULT }); // "Default" in OpenType
+        map.put(UnicodeScript.COPTIC, new String[] { "copt" });
+        map.put(UnicodeScript.CUNEIFORM, new String[] { "xsux" }); // "Sumero-Akkadian Cuneiform" in OpenType
+        map.put(UnicodeScript.CYPRIOT, new String[] { "cprt" });
+        map.put(UnicodeScript.CYRILLIC, new String[] { "cyrl" });
+        map.put(UnicodeScript.DESERET, new String[] { "dsrt" });
+        map.put(UnicodeScript.DEVANAGARI, new String[] { "dev2", "deva" });
         // Duployan: dupl
-        case EGYPTIAN_HIEROGLYPHS:
-            return "egyp";
+        map.put(UnicodeScript.EGYPTIAN_HIEROGLYPHS, new String[] { "egyp" });
         // Elbasan: elba
-        case ETHIOPIC:
-            return "ethi";
-        case GEORGIAN:
-            return "geor";
-        case GLAGOLITIC:
-            return "glag";
-        case GOTHIC:
-            return "goth";
+        map.put(UnicodeScript.ETHIOPIC, new String[] { "ethi" });
+        map.put(UnicodeScript.GEORGIAN, new String[] { "geor" });
+        map.put(UnicodeScript.GLAGOLITIC, new String[] { "glag" });
+        map.put(UnicodeScript.GOTHIC, new String[] { "goth" });
         // Grantha: gran
-        case GREEK:
-            return "grek";
-        case GUJARATI:
-            return "gujr";
-        // Gujarati v.2: gjr2
-        case GURMUKHI:
-            return "guru";
-        // Gurmukhi v.2: gur2
-        case HAN: // "CJK Ideographic" in OpenType
-            return "hani";
-        case HANGUL:
-            return "hang";
+        map.put(UnicodeScript.GREEK, new String[] { "grek" });
+        map.put(UnicodeScript.GUJARATI, new String[] { "gjr2", "gujr" });
+        map.put(UnicodeScript.GURMUKHI, new String[] { "gur2", "guru" });
+        map.put(UnicodeScript.HAN, new String[] { "hani" }); // "CJK Ideographic" in OpenType
+        map.put(UnicodeScript.HANGUL, new String[] { "hang" });
         // Hangul Jamo: jamo
-        case HANUNOO:
-            return "hano";
+        map.put(UnicodeScript.HANUNOO, new String[] { "hano" });
         // Hatran: hatr
-        case HEBREW:
-            return "hebr";
-        case HIRAGANA:
-            return "kana";
-        case IMPERIAL_ARAMAIC:
-            return "armi";
-        case INHERITED:
-            return SCRIPT_TAG_INHERITED;
-        case INSCRIPTIONAL_PAHLAVI:
-            return "phli";
-        case INSCRIPTIONAL_PARTHIAN:
-            return "prti";
-        case JAVANESE:
-            return "java";
-        case KAITHI:
-            return "kthi";
-        case KANNADA:
-            return "knda";
-        // Kannada v.2: knd2
-        case KATAKANA:
-            return "kana";
-        case KAYAH_LI:
-            return "kali";
-        case KHAROSHTHI:
-            return "khar";
-        case KHMER:
-            return "khmr";
+        map.put(UnicodeScript.HEBREW, new String[] { "hebr" });
+        map.put(UnicodeScript.HIRAGANA, new String[] { "kana" });
+        map.put(UnicodeScript.IMPERIAL_ARAMAIC, new String[] { "armi" });
+        map.put(UnicodeScript.INHERITED, new String[] { SCRIPT_TAG_INHERITED });
+        map.put(UnicodeScript.INSCRIPTIONAL_PAHLAVI, new String[] { "phli" });
+        map.put(UnicodeScript.INSCRIPTIONAL_PARTHIAN, new String[] { "prti" });
+        map.put(UnicodeScript.JAVANESE, new String[] { "java" });
+        map.put(UnicodeScript.KAITHI, new String[] { "kthi" });
+        map.put(UnicodeScript.KANNADA, new String[] { "knd2", "knda" });
+        map.put(UnicodeScript.KATAKANA, new String[] { "kana" });
+        map.put(UnicodeScript.KAYAH_LI, new String[] { "kali" });
+        map.put(UnicodeScript.KHAROSHTHI, new String[] { "khar" });
+        map.put(UnicodeScript.KHMER, new String[] { "khmr" });
         // Khojki: khoj
         // Khudawadi: sind
-        case LAO:
-            return "lao";
-        case LATIN:
-            return "latn";
-        case LEPCHA:
-            return "lepc";
-        case LIMBU:
-            return "limb";
+        map.put(UnicodeScript.LAO, new String[] { "lao" });
+        map.put(UnicodeScript.LATIN, new String[] { "latn" });
+        map.put(UnicodeScript.LEPCHA, new String[] { "lepc" });
+        map.put(UnicodeScript.LIMBU, new String[] { "limb" });
         // Linear A: lina
-        case LINEAR_B:
-            return "linb";
-        case LISU:
-            return "lisu";
-        case LYCIAN:
-            return "lyci";
-        case LYDIAN:
-            return "lydi";
+        map.put(UnicodeScript.LINEAR_B, new String[] { "linb" });
+        map.put(UnicodeScript.LISU, new String[] { "lisu" });
+        map.put(UnicodeScript.LYCIAN, new String[] { "lyci" });
+        map.put(UnicodeScript.LYDIAN, new String[] { "lydi" });
         // Mahajani: mahj
-        case MALAYALAM:
-            return "mlym";
-        // Malayalam v.2: mlm2
-        case MANDAIC:
-            return "mand";
+        map.put(UnicodeScript.MALAYALAM, new String[] { "mlm2", "mlym" });
+        map.put(UnicodeScript.MANDAIC, new String[] { "mand" });
         // Manichaean: mani
         // Marchen: marc
         // Mathematical Alphanumeric Symbols: math
-        case MEETEI_MAYEK:
-            return "mtei";
+        map.put(UnicodeScript.MEETEI_MAYEK, new String[] { "mtei" });
         // Mende Kikakui: mend
         // Meroitic Cursive: merc
         // Meroitic Hieroglyphs: mero
         // Miao: plrd
         // Modi: modi
-        case MONGOLIAN:
-            return "mong";
+        map.put(UnicodeScript.MONGOLIAN, new String[] { "mong" });
         // Mro: mroo
         // Multani: mult
         // Musical Symbols: musc
-        case MYANMAR:
-            return "mymr";
-        // Myanmar v.2: mym2
+        map.put(UnicodeScript.MYANMAR, new String[] { "mym2", "mymr" });
         // Nabataean: nbat
         // Newa: newa
-        case NEW_TAI_LUE:
-            return "talu";
-        case NKO:
-            return "nko ";
-        case OGHAM:
-            return "ogam";
-        case OL_CHIKI:
-            return "olck";
-        case OLD_ITALIC:
-            return "ital";
+        map.put(UnicodeScript.NEW_TAI_LUE, new String[] { "talu" });
+        map.put(UnicodeScript.NKO, new String[] { "nko " });
+        map.put(UnicodeScript.OGHAM, new String[] { "ogam" });
+        map.put(UnicodeScript.OL_CHIKI, new String[] { "olck" });
+        map.put(UnicodeScript.OLD_ITALIC, new String[] { "ital" });
         // Old Hungarian: hung
         // Old North Arabian: narb
         // Old Permic: perm
-        case OLD_PERSIAN:
-            return "xpeo";
-        case OLD_SOUTH_ARABIAN:
-            return "sarb";
-        case OLD_TURKIC:
-            return "orkh";
-        case ORIYA: // "Odia (formerly Oriya)"
-            return "orya";
-        // Odia v.2 (formerly Oriya v.2): ory2
+        map.put(UnicodeScript.OLD_PERSIAN, new String[] { "xpeo" });
+        map.put(UnicodeScript.OLD_SOUTH_ARABIAN, new String[] { "sarb" });
+        map.put(UnicodeScript.OLD_TURKIC, new String[] { "orkh" });
+        map.put(UnicodeScript.ORIYA, new String[] { "ory2", "orya" }); // "Odia (formerly Oriya)" in OpenType
         // Osage: osge
-        case OSMANYA:
-            return "osma";
+        map.put(UnicodeScript.OSMANYA, new String[] { "osma" });
         // Pahawh Hmong: hmng
         // Palmyrene: palm
         // Pau Cin Hau: pauc
-        case PHAGS_PA:
-            return "phag";
-        case PHOENICIAN:
-            return "phnx";
+        map.put(UnicodeScript.PHAGS_PA, new String[] { "phag" });
+        map.put(UnicodeScript.PHOENICIAN, new String[] { "phnx" });
         // Psalter Pahlavi: phlp
-        case REJANG:
-            return "rjng";
-        case RUNIC:
-            return "runr";
-        case SAMARITAN:
-            return "samr";
-        case SAURASHTRA:
-            return "saur";
+        map.put(UnicodeScript.REJANG, new String[] { "rjng" });
+        map.put(UnicodeScript.RUNIC, new String[] { "runr" });
+        map.put(UnicodeScript.SAMARITAN, new String[] { "samr" });
+        map.put(UnicodeScript.SAURASHTRA, new String[] { "saur" });
         // Sharada: shrd
-        case SHAVIAN:
-            return "shaw";
+        map.put(UnicodeScript.SHAVIAN, new String[] { "shaw" });
         // Siddham: sidd
         // Sign Writing: sgnw
-        case SINHALA:
-            return "sinh";
+        map.put(UnicodeScript.SINHALA, new String[] { "sinh" });
         // Sora Sompeng: sora
-        case SUNDANESE:
-            return "sund";
-        case SYLOTI_NAGRI:
-            return "sylo";
-        case SYRIAC:
-            return "syrc";
-        case TAGALOG:
-            return "tglg";
-        case TAGBANWA:
-            return "tagb";
-        case TAI_LE:
-            return "tale";
-        case TAI_THAM:
-            return "lana";
-        case TAI_VIET:
-            return "tavt";
+        map.put(UnicodeScript.SUNDANESE, new String[] { "sund" });
+        map.put(UnicodeScript.SYLOTI_NAGRI, new String[] { "sylo" });
+        map.put(UnicodeScript.SYRIAC, new String[] { "syrc" });
+        map.put(UnicodeScript.TAGALOG, new String[] { "tglg" });
+        map.put(UnicodeScript.TAGBANWA, new String[] { "tagb" });
+        map.put(UnicodeScript.TAI_LE, new String[] { "tale" });
+        map.put(UnicodeScript.TAI_THAM, new String[] { "lana" });
+        map.put(UnicodeScript.TAI_VIET, new String[] { "tavt" });
         // Takri: takr
-        case TAMIL:
-            return "taml";
-        // Tamil v.2: tml2
+        map.put(UnicodeScript.TAMIL, new String[] { "tml2", "taml" });
         // Tangut: tang
-        case TELUGU:
-            return "telu";
-        // Telugu v.2: tel2
-        case THAANA:
-            return "thaa";
-        case THAI:
-            return "thai";
-        case TIBETAN:
-            return "tibt";
-        case TIFINAGH:
-            return "tfng";
+        map.put(UnicodeScript.TELUGU, new String[] { "tel2", "telu" });
+        map.put(UnicodeScript.THAANA, new String[] { "thaa" });
+        map.put(UnicodeScript.THAI, new String[] { "thai" });
+        map.put(UnicodeScript.TIBETAN, new String[] { "tibt" });
+        map.put(UnicodeScript.TIFINAGH, new String[] { "tfng" });
         // Tirhuta: tirh
-        case UGARITIC:
-            return "ugar";
-        case UNKNOWN:
-            return SCRIPT_TAG_DEFAULT;
-        case VAI:
-            return "vai ";
+        map.put(UnicodeScript.UGARITIC, new String[] { "ugar" });
+        map.put(UnicodeScript.UNKNOWN, new String[] { SCRIPT_TAG_DEFAULT });
+        map.put(UnicodeScript.VAI, new String[] { "vai " });
         // Warang Citi: wara
-        case YI:
-            return "yi  ";
-        default:
-            return SCRIPT_TAG_DEFAULT;
+        map.put(UnicodeScript.YI, new String[] { "yi  " });
+        SCRIPT_TO_TAGS = map;
+    }
+
+    /**
+     * Convert a {@code UnicodeScript} to one or more OpenType script tags.
+     *
+     * @param script
+     * @return An array of four-char script tags
+     * @see #SCRIPT_TO_TAGS
+     */
+    private static String[] scriptToTags(UnicodeScript script)
+    {
+        String[] tags = SCRIPT_TO_TAGS.get(script);
+        if (tags == null)
+        {
+            tags = SCRIPT_TO_TAGS.get(UnicodeScript.COMMON);
         }
+        return tags;
     }
 
     private List<LangSysTable> getLangSysTables(String scriptTag)
