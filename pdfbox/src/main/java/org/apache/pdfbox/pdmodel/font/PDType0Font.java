@@ -91,7 +91,7 @@ public class PDType0Font extends PDFont implements PDVectorFont
     {
         if (vertical)
         {
-            ttf.setVertical(true);
+            ttf.enableVerticalSubstitutions();
         }
         embedder = new PDCIDFontType2Embedder(document, dict, ttf, embedSubset, this, vertical);
         descendantFont = embedder.getCIDFont();
