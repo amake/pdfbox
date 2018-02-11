@@ -22,15 +22,15 @@ import java.lang.Character.UnicodeScript;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -49,11 +49,11 @@ public class GlyphSubstitutionTable extends TTFTable
     private static final String SCRIPT_TAG_INHERITED = "<inherited>";
     private static final String SCRIPT_TAG_DEFAULT = "DFLT";
 
-    private ScriptRecord[] scriptList;
+    private LinkedHashMap<String, ScriptTable> scriptList;
+    // featureList and lookupList are not maps because we need to index into them
     private FeatureRecord[] featureList;
     private LookupTable[] lookupList;
 
-    private Set<String> supportedScripts;
     private Map<Integer, Integer> lookupCache = new HashMap<>();
     private Map<Integer, Integer> reverseLookup = new HashMap<>();
 
@@ -84,11 +84,9 @@ public class GlyphSubstitutionTable extends TTFTable
         scriptList = readScriptList(data, start + scriptListOffset);
         featureList = readFeatureList(data, start + featureListOffset);
         lookupList = readLookupList(data, start + lookupListOffset);
-
-        supportedScripts = getSupportedScripts();
     }
 
-    ScriptRecord[] readScriptList(TTFDataStream data, long offset) throws IOException
+    LinkedHashMap<String, ScriptTable> readScriptList(TTFDataStream data, long offset) throws IOException
     {
         data.seek(offset);
         int scriptCount = data.readUnsignedShort();
@@ -105,7 +103,11 @@ public class GlyphSubstitutionTable extends TTFTable
         {
             scriptRecords[i].scriptTable = readScriptTable(data, offset + scriptOffsets[i]);
         }
-        return scriptRecords;
+        LinkedHashMap<String, ScriptTable> scriptList = new LinkedHashMap<>(scriptCount);
+        for (ScriptRecord scriptRecord : scriptRecords) {
+            scriptList.put(scriptRecord.scriptTag, scriptRecord.scriptTable);
+        }
+        return scriptList;
     }
 
     ScriptTable readScriptTable(TTFDataStream data, long offset) throws IOException
@@ -114,14 +116,14 @@ public class GlyphSubstitutionTable extends TTFTable
         ScriptTable scriptTable = new ScriptTable();
         int defaultLangSys = data.readUnsignedShort();
         int langSysCount = data.readUnsignedShort();
-        scriptTable.langSysRecords = new LangSysRecord[langSysCount];
+        LangSysRecord[] langSysRecords = new LangSysRecord[langSysCount];
         int[] langSysOffsets = new int[langSysCount];
         for (int i = 0; i < langSysCount; i++)
         {
             LangSysRecord langSysRecord = new LangSysRecord();
             langSysRecord.langSysTag = data.readString(4);
             langSysOffsets[i] = data.readUnsignedShort();
-            scriptTable.langSysRecords[i] = langSysRecord;
+            langSysRecords[i] = langSysRecord;
         }
         if (defaultLangSys != 0)
         {
@@ -129,8 +131,12 @@ public class GlyphSubstitutionTable extends TTFTable
         }
         for (int i = 0; i < langSysCount; i++)
         {
-            scriptTable.langSysRecords[i].langSysTable = readLangSysTable(data,
+            langSysRecords[i].langSysTable = readLangSysTable(data,
                     offset + langSysOffsets[i]);
+        }
+        scriptTable.langSysTables = new LinkedHashMap<>(langSysCount);
+        for (LangSysRecord langSysRecord : langSysRecords) {
+            scriptTable.langSysTables.put(langSysRecord.langSysTag, langSysRecord.langSysTable);
         }
         return scriptTable;
     }
@@ -306,15 +312,6 @@ public class GlyphSubstitutionTable extends TTFTable
         }
     }
 
-    private Set<String> getSupportedScripts()
-    {
-        Set<String> result = new HashSet<>(scriptList.length);
-        for (ScriptRecord scriptRecord : scriptList)
-        {
-            result.add(scriptRecord.scriptTag);
-        }
-        return result;
-    }
 
     /**
      * Get the OpenType script tag corresponding to the provided {@code UnicodeScript}.
@@ -328,7 +325,7 @@ public class GlyphSubstitutionTable extends TTFTable
         {
             String tag = tags[0];
             if (tag == SCRIPT_TAG_INHERITED
-                    || (tag == SCRIPT_TAG_DEFAULT && !supportedScripts.contains(tag)))
+                    || (tag == SCRIPT_TAG_DEFAULT && !scriptList.containsKey(tag)))
             {
                 // We don't know what script this should be.
                 if (lastUsedSupportedScript != null)
@@ -339,13 +336,13 @@ public class GlyphSubstitutionTable extends TTFTable
                 else
                 {
                     // We have no past context and (currently) no way to get future context so we guess.
-                    return lastUsedSupportedScript = scriptList[0].scriptTag;
+                    return lastUsedSupportedScript = scriptList.keySet().iterator().next();
                 }
             }
         }
         for (String tag : tags)
         {
-            if (supportedScripts.contains(tag))
+            if (scriptList.containsKey(tag))
             {
                 // Use the first recognized tag. We assume a single font only recognizes one version ("ver. 2")
                 // of a single script, or if it recognizes more than one that it prefers the latest one.
@@ -530,22 +527,17 @@ public class GlyphSubstitutionTable extends TTFTable
         return tags;
     }
 
-    private List<LangSysTable> getLangSysTables(String scriptTag)
+    private Collection<LangSysTable> getLangSysTables(String scriptTag)
     {
-        List<LangSysTable> result = new ArrayList<>();
-        for (ScriptRecord scriptRecord : scriptList)
+        Collection<LangSysTable> result = Collections.emptyList();
+        ScriptTable scriptTable = scriptList.get(scriptTag);
+        if (scriptTable != null)
         {
-            if (scriptRecord.scriptTag.equals(scriptTag))
-            {
-                LangSysTable def = scriptRecord.scriptTable.defaultLangSysTable;
-                if (def != null)
-                {
-                    result.add(def);
-                }
-                for (LangSysRecord langSysRecord : scriptRecord.scriptTable.langSysRecords)
-                {
-                    result.add(langSysRecord.langSysTable);
-                }
+            if (scriptTable.defaultLangSysTable == null) {
+                result = scriptTable.langSysTables.values();
+            } else {
+                result = new ArrayList<>(scriptTable.langSysTables.values());
+                result.add(scriptTable.defaultLangSysTable);
             }
         }
         return result;
@@ -562,7 +554,7 @@ public class GlyphSubstitutionTable extends TTFTable
      * @param enabledFeatures An optional whitelist of feature tags ({@code null} to allow all)
      * @return The indicated {@code FeatureRecord}s
      */
-    private List<FeatureRecord> getFeatureRecords(List<LangSysTable> langSysTables,
+    private List<FeatureRecord> getFeatureRecords(Collection<LangSysTable> langSysTables,
             final List<String> enabledFeatures)
     {
         List<FeatureRecord> result = new ArrayList<>();
@@ -575,13 +567,10 @@ public class GlyphSubstitutionTable extends TTFTable
             }
             for (int featureIndex : langSysTable.featureIndices)
             {
-                if (featureIndex >= 0 && featureIndex < featureList.length)
+                if (enabledFeatures == null
+                        || enabledFeatures.contains(featureList[featureIndex].featureTag))
                 {
-                    if (enabledFeatures == null
-                            || enabledFeatures.contains(featureList[featureIndex].featureTag))
-                    {
-                        result.add(featureList[featureIndex]);
-                    }
+                    result.add(featureList[featureIndex]);
                 }
             }
         }
@@ -635,43 +624,18 @@ public class GlyphSubstitutionTable extends TTFTable
 
     private int applyFeature(FeatureRecord featureRecord, int gid)
     {
-        List<LookupTable> lookupTables = getLookupTables(featureRecord);
-        if (!lookupTablesSupported(lookupTables))
+        for (int lookupListIndex : featureRecord.featureTable.lookupListIndices)
         {
-            LOG.debug("Skipping GSUB feature '" + featureRecord.featureTag
-                    + "' because it requires unsupported lookup table type");
-            return gid;
-        }
-        for (LookupTable lookupTable : lookupTables)
-        {
+            LookupTable lookupTable = lookupList[lookupListIndex];
+            if (lookupTable.lookupType != 1)
+            {
+                LOG.debug("Skipping GSUB feature '" + featureRecord.featureTag
+                        + "' because it requires unsupported lookup table type " + lookupTable.lookupType);
+                continue;
+            }
             gid = doLookup(lookupTable, gid);
         }
         return gid;
-    }
-
-    private boolean lookupTablesSupported(List<LookupTable> lookupTables)
-    {
-        for (LookupTable lookupTable : lookupTables)
-        {
-            if (lookupTable.lookupType != 1)
-            {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private List<LookupTable> getLookupTables(FeatureRecord featureRecord)
-    {
-        List<LookupTable> result = new ArrayList<>();
-        for (int lookupListIndex : featureRecord.featureTable.lookupListIndices)
-        {
-            if (lookupListIndex >= 0 && lookupListIndex < lookupList.length)
-            {
-                result.add(lookupList[lookupListIndex]);
-            }
-        }
-        return result;
     }
 
     private int doLookup(LookupTable lookupTable, int gid)
@@ -701,7 +665,7 @@ public class GlyphSubstitutionTable extends TTFTable
             // as we need a one-to-one mapping.
             return cached;
         }
-        List<LangSysTable> langSysTables = getLangSysTables(getScriptTag(script));
+        Collection<LangSysTable> langSysTables = getLangSysTables(getScriptTag(script));
         if (langSysTables.isEmpty())
         {
             return gid;
@@ -757,13 +721,13 @@ public class GlyphSubstitutionTable extends TTFTable
     static class ScriptTable
     {
         LangSysTable defaultLangSysTable;
-        LangSysRecord[] langSysRecords;
+        LinkedHashMap<String, LangSysTable> langSysTables;
 
         @Override
         public String toString()
         {
             return String.format("ScriptTable[hasDefault=%s,langSysRecordsCount=%d]",
-                    defaultLangSysTable != null, langSysRecords.length);
+                    defaultLangSysTable != null, langSysTables.size());
         }
     }
 
