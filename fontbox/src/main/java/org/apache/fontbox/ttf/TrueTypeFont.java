@@ -737,4 +737,13 @@ public class TrueTypeFont implements FontBoxFont, Closeable
     {
         enabledGsubFeatures.remove(featureTag);
     }
+
+    /**
+     * Enable glyph substitutions for vertical writing.
+     */
+    public void enableVerticalSubstitutions()
+    {
+        enableGsubFeature("vrt2");
+        enableGsubFeature("vert");
+    }
 }
