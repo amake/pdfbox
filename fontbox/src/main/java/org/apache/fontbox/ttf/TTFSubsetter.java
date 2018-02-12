@@ -55,7 +55,7 @@ public final class TTFSubsetter
     private static final byte[] PAD_BUF = new byte[] { 0, 0, 0 };
 
     private final TrueTypeFont ttf;
-    private final CmapSubtable unicodeCmap;
+    private final CmapLookup unicodeCmap;
     private final SortedMap<Integer, Integer> uniToGID;
 
     private final List<String> keepTables;
