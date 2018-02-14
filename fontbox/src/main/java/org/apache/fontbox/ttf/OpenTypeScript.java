@@ -20,11 +20,13 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.LineNumberReader;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.StringTokenizer;
+import java.util.TreeMap;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -203,7 +205,8 @@ public final class OpenTypeScript
         UNICODE_SCRIPT_TO_OPENTYPE_TAG_MAP = map;
     }
 
-    private static final Map<int[], String> UNICODE_SCRIPT_MAP = new LinkedHashMap<>();
+    private static int[] unicodeRangeStarts;
+    private static String[] unicodeRangeScripts;
 
     static
     {
@@ -229,6 +232,13 @@ public final class OpenTypeScript
 
     private static void parseScriptsFile(InputStream inputStream) throws IOException
     {
+        Map<int[], String> unicodeRanges = new TreeMap<>(new Comparator<int[]>()
+        {
+            public int compare(int[] o1, int[] o2)
+            {
+                return o1[0] < o2[0] ? -1 : o1[0] == o2[0] ? 0 : 1;
+            };
+        });
         LineNumberReader rd = new LineNumberReader(new InputStreamReader(inputStream));
         int[] lastRange = { Integer.MIN_VALUE, Integer.MIN_VALUE };
         String lastScript = null;
@@ -277,13 +287,22 @@ public final class OpenTypeScript
             }
             else
             {
-                // initialize the UNICODE_SCRIPT_MAP
-                UNICODE_SCRIPT_MAP.put(range, script);
+                unicodeRanges.put(range, script);
                 lastRange = range;
                 lastScript = script;
             }
         } while (true);
         rd.close();
+
+        unicodeRangeStarts = new int[unicodeRanges.size()];
+        unicodeRangeScripts = new String[unicodeRanges.size()];
+        int i = 0;
+        for (Entry<int[], String> e : unicodeRanges.entrySet())
+        {
+            unicodeRangeStarts[i] = e.getKey()[0];
+            unicodeRangeScripts[i] = e.getValue();
+            i++;
+        }
     }
 
     /**
@@ -295,15 +314,17 @@ public final class OpenTypeScript
     private static String getUnicodeScript(int codePoint)
     {
         ensureValidCodePoint(codePoint);
-        for (Entry<int[], String> e : UNICODE_SCRIPT_MAP.entrySet())
+        int type = Character.getType(codePoint);
+        if (type == Character.UNASSIGNED)
         {
-            int[] range = e.getKey();
-            if (range[0] <= codePoint && codePoint <= range[1])
-            {
-                return e.getValue();
-            }
+            return UNKNOWN;
         }
-        return UNKNOWN;
+        int scriptIndex = Arrays.binarySearch(unicodeRangeStarts, codePoint);
+        if (scriptIndex < 0)
+        {
+            scriptIndex = -scriptIndex - 2;
+        }
+        return unicodeRangeScripts[scriptIndex];
     }
 
     /**
