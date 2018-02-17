@@ -94,11 +94,15 @@ public class TestFontEmbedding extends TestCase
             // Check the dictionaries
             COSDictionary fontDict = vfont.getCOSObject();
             assertEquals(COSName.IDENTITY_V, fontDict.getDictionaryObject(COSName.ENCODING));
+
+            document.save(pdf);
+
+            // Vertical metrics are fixed during subsetting, so do this after calling save()
             COSDictionary descFontDict = vfont.getDescendantFont().getCOSObject();
             COSArray dw2 = (COSArray) descFontDict.getDictionaryObject(COSName.DW2);
-            assertEquals(880, dw2.getInt(0));
-            assertEquals(-1000, dw2.getInt(1));
-            document.save(pdf);
+            assertNull(dw2); // This font uses default values for DW2
+            COSArray w2 = (COSArray) descFontDict.getDictionaryObject(COSName.W2);
+            assertEquals(0, w2.size()); // Monospaced font has no entries
         }
 
         // Check text extraction
