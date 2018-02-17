@@ -479,6 +479,18 @@ public class GlyphSubstitutionTable extends TTFTable
         return gid;
     }
 
+    /**
+     * Apply glyph substitutions to the supplied gid. The applicable substitutions are determined by the
+     * {@code scriptTags} which indicate the language of the gid, and by the {@code enabledFeatures} which acts as a
+     * whitelist.
+     *
+     * To ensure that a single gid isn't mapped to multiple substitutions, subsequent invocations with the same gid will
+     * return the same result as the first, regardless of script or enabled features.
+     *
+     * @param gid GID
+     * @param scriptTags Script tags applicable to the gid (see {@link OpenTypeScript})
+     * @param enabledFeatures Whitelist of features to apply
+     */
     public int getSubstitution(int gid, String[] scriptTags, List<String> enabledFeatures)
     {
         if (gid == -1)
@@ -506,6 +518,14 @@ public class GlyphSubstitutionTable extends TTFTable
         return sgid;
     }
 
+    /**
+     * For a substitute-gid (obtained from {@link #getSubstitution(int, String[], List)}), retrieve the original gid.
+     *
+     * Only gids previously substituted by this instance can be un-substituted. If you are trying to unsubstitute before
+     * you substitute, something is wrong.
+     *
+     * @param sgid Substitute GID
+     */
     public int getUnsubstitution(int sgid)
     {
         Integer gid = reverseLookup.get(sgid);
