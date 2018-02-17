@@ -382,6 +382,9 @@ public class GlyphSubstitutionTable extends TTFTable
     private List<FeatureRecord> getFeatureRecords(Collection<LangSysTable> langSysTables,
             final List<String> enabledFeatures)
     {
+        if (langSysTables.isEmpty()) {
+            return Collections.emptyList();
+        }
         List<FeatureRecord> result = new ArrayList<>();
         for (LangSysTable langSysTable : langSysTables)
         {
@@ -490,16 +493,9 @@ public class GlyphSubstitutionTable extends TTFTable
             // as we need a one-to-one mapping.
             return cached;
         }
-        Collection<LangSysTable> langSysTables = getLangSysTables(selectScriptTag(scriptTags));
-        if (langSysTables.isEmpty())
-        {
-            return gid;
-        }
+        String scriptTag = selectScriptTag(scriptTags);
+        Collection<LangSysTable> langSysTables = getLangSysTables(scriptTag);
         List<FeatureRecord> featureRecords = getFeatureRecords(langSysTables, enabledFeatures);
-        if (featureRecords.isEmpty())
-        {
-            return gid;
-        }
         int sgid = gid;
         for (FeatureRecord featureRecord : featureRecords)
         {
