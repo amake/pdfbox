@@ -50,7 +50,7 @@ import org.apache.pdfbox.pdmodel.common.PDStream;
  * @author Keiji Suzuki
  * @author John Hewson
  */
-final class PDCIDFontType2Embedder extends TrueTypeEmbedder
+class PDCIDFontType2Embedder extends TrueTypeEmbedder
 {
 
     private static final Log LOG = LogFactory.getLog(PDCIDFontType2Embedder.class);
@@ -529,8 +529,8 @@ final class PDCIDFontType2Embedder extends TrueTypeEmbedder
         int[] gidMetrics = new int[cidMax * 4];
         for (int cid = 0; cid < cidMax; cid++)
         {
-            GlyphData glyph = ttf.getGlyph().getGlyph(cid);
-            if (glyph == null)
+            int verticalOrigin = getVerticalOrigin(cid);
+            if (verticalOrigin == -1)
             {
                 gidMetrics[cid * 4] = Integer.MIN_VALUE;
             }
@@ -539,11 +539,20 @@ final class PDCIDFontType2Embedder extends TrueTypeEmbedder
                 gidMetrics[cid * 4] = cid;
                 gidMetrics[cid * 4 + 1] = ttf.getVerticalMetrics().getAdvanceHeight(cid);
                 gidMetrics[cid * 4 + 2] = ttf.getHorizontalMetrics().getAdvanceWidth(cid);
-                gidMetrics[cid * 4 + 3] = glyph.getYMaximum() + ttf.getVerticalMetrics().getTopSideBearing(cid);
+                gidMetrics[cid * 4 + 3] = verticalOrigin;
             }
         }
 
         cidFont.setItem(COSName.W2, getVerticalMetrics(gidMetrics));
+    }
+
+    protected int getVerticalOrigin(int cid) throws IOException {
+        GlyphData glyph = ttf.getGlyph().getGlyph(cid);
+        if (glyph == null)
+        {
+            return -1;
+        }
+        return glyph.getYMaximum() + ttf.getVerticalMetrics().getTopSideBearing(cid);
     }
 
     private COSArray getVerticalMetrics(int[] values) throws IOException

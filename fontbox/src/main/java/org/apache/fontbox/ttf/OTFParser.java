@@ -94,9 +94,10 @@ public final class OTFParser extends TTFParser
             case "BASE":
             case "GDEF":
             case "GPOS":
-            case "GSUB":
             case "JSTF":
                 return new OTLTable(font);
+            case "GSUB":
+                return new GlyphSubstitutionTable(font);
             case "CFF ":
                 return new CFFTable(font);
             default:

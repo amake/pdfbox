@@ -25,6 +25,7 @@ import java.util.Set;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.fontbox.cmap.CMap;
+import org.apache.fontbox.ttf.OpenTypeFont;
 import org.apache.fontbox.ttf.TTFParser;
 import org.apache.fontbox.ttf.TrueTypeFont;
 import org.apache.fontbox.util.BoundingBox;
@@ -92,7 +93,9 @@ public class PDType0Font extends PDFont implements PDVectorFont
         {
             ttf.enableVerticalSubstitutions();
         }
-        embedder = new PDCIDFontType2Embedder(document, dict, ttf, embedSubset, this, vertical);
+        embedder = ttf instanceof OpenTypeFont
+                ? new PDCIDFontType0Embedder(document, dict, ttf, embedSubset, this, vertical)
+                : new PDCIDFontType2Embedder(document, dict, ttf, embedSubset, this, vertical);
         descendantFont = embedder.getCIDFont();
         readEncoding();
         fetchCMapUCS2();
